@@ -7,9 +7,7 @@ import net.sf.jsqlparser.expression.LongValue;
 import net.sf.jsqlparser.expression.Parenthesis;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
 import net.sf.jsqlparser.expression.operators.conditional.OrExpression;
-import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
-import net.sf.jsqlparser.expression.operators.relational.InExpression;
-import net.sf.jsqlparser.expression.operators.relational.ItemsList;
+import net.sf.jsqlparser.expression.operators.relational.*;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
@@ -34,7 +32,7 @@ public class TenantInterceptor implements StatementInspector {
     /**
      * 数据库表租户字段名
      */
-    private final String tenantIdColumn = "tenant_id";
+    private static final String TENANT_ID_COLUMN = "tenant_id";
 
     /**
      * 拦截查询sql，并修改sql增加租户信息
@@ -50,7 +48,6 @@ public class TenantInterceptor implements StatementInspector {
             if (stmt instanceof Select) {
                 sql = filterSelect(stmt);
             }
-            System.out.println(sql);
         } catch (JSQLParserException e) {
             e.printStackTrace();
         }
@@ -89,6 +86,18 @@ public class TenantInterceptor implements StatementInspector {
             if (tenantTables.contains(tableName)) {
                 Expression whereExpression = plainSelect.getWhere();
                 plainSelect.setWhere(setWhereExpression(whereExpression, fromTable));
+                // 条件in
+                if (whereExpression instanceof InExpression) {
+                    filterInSelectBody(whereExpression);
+                }
+                // 条件>
+                if (whereExpression instanceof GreaterThan) {
+                    filterGreaterThanSelectBody(whereExpression);
+                }
+                // 条件<
+                if (whereExpression instanceof MinorThan) {
+                    filterMinorThanSelectBody(whereExpression);
+                }
             } else {
                 Expression whereExpression = plainSelect.getWhere();
                 // 过滤条件查询中是否包含in
@@ -131,12 +140,9 @@ public class TenantInterceptor implements StatementInspector {
                 filterInAndSubQuery(leftExpression);
             }
         } else if (expression instanceof InExpression) {
-            InExpression inExpression = (InExpression) expression;
-            ItemsList itemsList = inExpression.getRightItemsList();
-            if (itemsList instanceof SubSelect) {
-                SubSelect subSelect = (SubSelect) itemsList;
-                filterSelectBody(subSelect.getSelectBody());
-            }
+
+            filterInSelectBody(expression);
+
         } else if (expression instanceof EqualsTo) {
             EqualsTo equalsTo = (EqualsTo) expression;
             Expression rightExpression = equalsTo.getRightExpression();
@@ -176,12 +182,8 @@ public class TenantInterceptor implements StatementInspector {
     private void filterInSubQuery(Expression rightExpression) {
         if (rightExpression instanceof InExpression) {
             // 处理 id in (select id from country) 类语句
-            InExpression inExpression = (InExpression) rightExpression;
-            ItemsList itemsList = inExpression.getRightItemsList();
-            if (itemsList instanceof SubSelect) {
-                SubSelect subSelect = (SubSelect) itemsList;
-                filterSelectBody(subSelect.getSelectBody());
-            }
+            filterInSelectBody(rightExpression);
+
         } else if (rightExpression instanceof EqualsTo) {
             // 处理 id = (select id from country) 类自查询语句
             EqualsTo equalsTo = (EqualsTo) rightExpression;
@@ -220,6 +222,41 @@ public class TenantInterceptor implements StatementInspector {
         }
     }
 
+    /**
+     * 条件<
+     * @param whereExpression
+     */
+    private void filterMinorThanSelectBody(Expression whereExpression) {
+        MinorThan minorThan = (MinorThan) whereExpression;
+        Expression expression = minorThan.getRightExpression();
+        if (expression instanceof SubSelect) {
+            SubSelect subSelect = (SubSelect) expression;
+            filterSelectBody(subSelect.getSelectBody());
+        }
+    }
+
+    /**
+     * 条件>
+     * @param whereExpression
+     */
+    private void filterGreaterThanSelectBody(Expression whereExpression) {
+        GreaterThan greaterThan = (GreaterThan) whereExpression;
+        Expression expression = greaterThan.getRightExpression();
+        if (expression instanceof SubSelect) {
+            SubSelect subSelect = (SubSelect) expression;
+            filterSelectBody(subSelect.getSelectBody());
+        }
+    }
+
+    private void filterInSelectBody(Expression whereExpression) {
+        InExpression inExpression = (InExpression) whereExpression;
+        ItemsList itemsList = inExpression.getRightItemsList();
+        if (itemsList instanceof SubSelect) {
+            SubSelect subSelect = (SubSelect) itemsList;
+            filterSelectBody(subSelect.getSelectBody());
+        }
+    }
+
     private Column getAliasColumn(Table table) {
         StringBuilder column = new StringBuilder();
         if (null == table.getAlias()) {
@@ -228,8 +265,9 @@ public class TenantInterceptor implements StatementInspector {
             column.append(table.getAlias().getName());
         }
         column.append(".");
-        column.append(tenantIdColumn);
+        column.append(TENANT_ID_COLUMN);
         return new Column(column.toString());
     }
+
 
 }

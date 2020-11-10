@@ -32,11 +32,12 @@ public class CountryController {
     @GetMapping("/country")
     public Object testListener() {
         Country country = new Country();
+        country.setId(10000L);
         country.setName("aa");
         Random random = new Random();
         int tenantId = random.nextInt(100);
         SaasUtils.setTenantId(tenantId);
-        return countryRepository.findByOthers();
+        return countryRepository.save(country);
     }
 
     @GetMapping("/customer")

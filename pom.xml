@@ -72,8 +72,14 @@
             <optional>true</optional>
         </dependency>
 
+		<!-- https://mvnrepository.com/artifact/org.hsqldb/hsqldb -->
+		<dependency>
+			<groupId>org.hsqldb</groupId>
+			<artifactId>hsqldb</artifactId>
+			<version>2.5.1</version>
+		</dependency>
 
-        <!-- spring's support for quartz -->
+		<!-- spring's support for quartz -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-context-support</artifactId>
